@@ -45,3 +45,17 @@ dotnet publish .\src\SpotlightSaver\SpotlightSaver.csproj -c Release -r win-x64 
 ## Portfolio note
 
 This project demonstrates Windows automation, local file handling, metadata extraction, defensive programming, and practical user-focused tooling.
+
+## Download
+
+Download the latest Windows build here:
+
+https://github.com/clintkosh/SpotlightSaver/releases/latest
+
+Or view all releases:
+
+https://github.com/clintkosh/SpotlightSaver/releases
+
+The app is portable. Download the ZIP, unzip it, then double-click SpotlightSaver.exe.
+
+Windows may show a SmartScreen warning because this is an unsigned independent utility.
