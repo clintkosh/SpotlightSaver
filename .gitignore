@@ -6,3 +6,8 @@ obj/
 publish/
 artifacts/
 TestResults/
+
+dist/
+publish/
+*.zip
+*.exe
