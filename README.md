@@ -59,3 +59,29 @@ https://github.com/clintkosh/SpotlightSaver/releases
 The app is portable. Download the ZIP, unzip it, then double-click SpotlightSaver.exe.
 
 Windows may show a SmartScreen warning because this is an unsigned independent utility.
+
+## Local AI image analysis
+
+SpotlightSaver can optionally ask a local Ollama vision model to analyze the saved wallpaper.
+
+This is local-only. The app sends the saved image to `http://localhost:11434` on your own machine. It does not upload the image to a cloud service.
+
+Supported local model auto-detection includes common Ollama vision models such as:
+
+- llama3.2-vision
+- llava
+- bakllava
+- moondream
+- gemma3
+
+Example setup:
+
+ollama pull llama3.2-vision
+
+or:
+
+ollama pull llava
+
+If Ollama is not running or no vision model is found, SpotlightSaver still saves the wallpaper and metadata file, then records that local AI analysis was unavailable.
+
+AI location guesses are not facts. The metadata file labels AI analysis as best-effort visual inference.
