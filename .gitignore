@@ -11,3 +11,8 @@ dist/
 publish/
 *.zip
 *.exe
+publish/
+publish-exe/
+dist/
+*.zip
+*.exe

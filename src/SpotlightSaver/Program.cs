@@ -98,7 +98,7 @@ public sealed class MainForm : Form
 
         aiCheckBox = new CheckBox
         {
-            Text = "Use local AI analysis with Ollama",
+            Text = "Use onboard image analysis",
             Checked = true,
             Font = new Font("Segoe UI", 10f, FontStyle.Bold),
             ForeColor = Palette.Text,
@@ -111,7 +111,7 @@ public sealed class MainForm : Form
 
         aiHintLabel = new Label
         {
-            Text = "Looks for local vision models at http://localhost:11434. No cloud upload.",
+            Text = "Built into this EXE. No Ollama, no server, no cloud upload.",
             Font = new Font("Segoe UI", 9f, FontStyle.Regular),
             ForeColor = Palette.MutedText,
             BackColor = Palette.Card,
@@ -155,7 +155,7 @@ public sealed class MainForm : Form
 
         statusLabel = new Label
         {
-            Text = "Ready. AI analysis is optional and local-only.",
+            Text = "Ready. Onboard analysis is built in and local-only.",
             Font = new Font("Segoe UI", 9.5f, FontStyle.Regular),
             ForeColor = Palette.MutedText,
             BackColor = Palette.Card,
@@ -297,14 +297,14 @@ public sealed class MainForm : Form
 
             if (aiCheckBox.Checked)
             {
-                statusLabel.Text = "Saved image. Asking local Ollama vision model...";
+                statusLabel.Text = "Saved image. Running onboard visual analyzer...";
                 Refresh();
 
-                aiAnalysis = await LocalAiAnalyzer.AnalyzeImageAsync(outputImage);
+                aiAnalysis = await Task.Run(() => BuiltInImageAnalyzer.AnalyzeImage(outputImage));
             }
             else
             {
-                aiAnalysis = "Local AI analysis: Skipped by user.";
+                aiAnalysis = "Onboard image analysis: Skipped by user.";
             }
 
             File.WriteAllText(
@@ -350,232 +350,379 @@ public sealed class MainForm : Form
     }
 }
 
-public static class LocalAiAnalyzer
+public static class BuiltInImageAnalyzer
 {
-    private static readonly HttpClient Client = new()
-    {
-        Timeout = TimeSpan.FromSeconds(90)
-    };
-
-    private static readonly string[] PreferredVisionModelNames =
-    [
-        "llama3.2-vision",
-        "llava",
-        "bakllava",
-        "moondream",
-        "gemma3"
-    ];
-
-    public static async Task<string> AnalyzeImageAsync(string imagePath)
+    public static string AnalyzeImage(string imagePath)
     {
         try
         {
-            var model = await FindVisionModelAsync();
+            using var original = Image.FromFile(imagePath);
+            using var bitmap = new Bitmap(original, new Size(160, 90));
 
-            if (string.IsNullOrWhiteSpace(model))
+            var width = bitmap.Width;
+            var height = bitmap.Height;
+            var total = width * height;
+
+            int skyLike = 0;
+            int waterLike = 0;
+            int vegetationLike = 0;
+            int snowLike = 0;
+            int sandLike = 0;
+            int rockLike = 0;
+            int darkLike = 0;
+            int brightLike = 0;
+            int warmLike = 0;
+            int coolLike = 0;
+            int artificialLike = 0;
+
+            double totalBrightness = 0;
+            double totalSaturation = 0;
+            double topBlue = 0;
+            double bottomBlue = 0;
+            double topGreen = 0;
+            double bottomGreen = 0;
+
+            var edgeScore = 0;
+            var horizonScore = 0;
+
+            for (int y = 0; y < height; y++)
             {
-                return """
-Local AI analysis: Unavailable.
+                double rowBrightness = 0;
 
-Reason:
-No likely Ollama vision model was found.
-
-Install one locally, for example:
-ollama pull llama3.2-vision
-or:
-ollama pull llava
-
-Then rerun SpotlightSaver.
-""";
-            }
-
-            var base64Image = Convert.ToBase64String(await File.ReadAllBytesAsync(imagePath));
-
-            var prompt = """
-You are analyzing a Windows wallpaper or Windows Spotlight background image saved locally.
-
-Provide a careful best-effort visual analysis.
-
-Include:
-1. A concise scene description.
-2. Visible natural features, architecture, landmarks, signs, text, vehicles, terrain, plants, water, mountains, city details, or cultural clues.
-3. Possible location, region, or country if visual clues support it.
-4. Confidence level for any location guess.
-5. A warning if the location is unknown or uncertain.
-
-Rules:
-- Do not claim a precise location unless the image itself strongly supports it.
-- Do not pretend Microsoft metadata is available.
-- Do not invent.
-- Label guesses clearly.
-- Keep it under 220 words.
-""";
-
-            var request = new
-            {
-                model,
-                prompt,
-                images = new[] { base64Image },
-                stream = false,
-                options = new
+                for (int x = 0; x < width; x++)
                 {
-                    temperature = 0.1,
-                    num_predict = 350
-                }
-            };
+                    var c = bitmap.GetPixel(x, y);
 
-            var json = JsonSerializer.Serialize(request);
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                    var r = c.R / 255.0;
+                    var g = c.G / 255.0;
+                    var b = c.B / 255.0;
 
-            using var response = await Client.PostAsync("http://localhost:11434/api/generate", content);
-            var responseText = await response.Content.ReadAsStringAsync();
+                    var max = Math.Max(r, Math.Max(g, b));
+                    var min = Math.Min(r, Math.Min(g, b));
+                    var brightness = (r + g + b) / 3.0;
+                    var saturation = max == 0 ? 0 : (max - min) / max;
 
-            if (!response.IsSuccessStatusCode)
-            {
-                return $"""
-Local AI analysis: Failed.
+                    totalBrightness += brightness;
+                    totalSaturation += saturation;
+                    rowBrightness += brightness;
 
-Model attempted:
-{model}
-
-HTTP status:
-{(int)response.StatusCode} {response.ReasonPhrase}
-
-Response:
-{TrimForMetadata(responseText)}
-""";
-            }
-
-            using var doc = JsonDocument.Parse(responseText);
-
-            if (doc.RootElement.TryGetProperty("response", out var result))
-            {
-                var analysis = result.GetString();
-
-                if (!string.IsNullOrWhiteSpace(analysis))
-                {
-                    return $"""
-Local AI analysis generated by Ollama model:
-{model}
-
-{analysis.Trim()}
-""";
-                }
-            }
-
-            return $"""
-Local AI analysis: Failed.
-
-Model attempted:
-{model}
-
-Reason:
-Ollama returned no usable response text.
-""";
-        }
-        catch (HttpRequestException ex)
-        {
-            return $"""
-Local AI analysis: Unavailable.
-
-Reason:
-Could not connect to Ollama at http://localhost:11434.
-
-Details:
-{ex.Message}
-
-Fix:
-Start Ollama and make sure a vision model is installed.
-""";
-        }
-        catch (TaskCanceledException)
-        {
-            return """
-Local AI analysis: Timed out.
-
-Reason:
-The local vision model took too long to respond.
-
-Fix:
-Try a smaller model such as moondream or make sure Ollama is running with GPU acceleration.
-""";
-        }
-        catch (Exception ex)
-        {
-            return $"""
-Local AI analysis: Failed.
-
-Details:
-{ex.Message}
-""";
-        }
-    }
-
-    private static async Task<string?> FindVisionModelAsync()
-    {
-        try
-        {
-            using var response = await Client.GetAsync("http://localhost:11434/api/tags");
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
-
-            var responseText = await response.Content.ReadAsStringAsync();
-
-            using var doc = JsonDocument.Parse(responseText);
-
-            if (!doc.RootElement.TryGetProperty("models", out var models) || models.ValueKind != JsonValueKind.Array)
-            {
-                return null;
-            }
-
-            var installed = new List<string>();
-
-            foreach (var model in models.EnumerateArray())
-            {
-                if (model.TryGetProperty("name", out var nameProp))
-                {
-                    var name = nameProp.GetString();
-
-                    if (!string.IsNullOrWhiteSpace(name))
+                    if (y < height / 3)
                     {
-                        installed.Add(name);
+                        topBlue += b;
+                        topGreen += g;
+                    }
+
+                    if (y > height * 2 / 3)
+                    {
+                        bottomBlue += b;
+                        bottomGreen += g;
+                    }
+
+                    if (b > r * 1.15 && b > g * 1.05 && brightness > 0.35)
+                    {
+                        skyLike++;
+                    }
+
+                    if (b > r * 1.1 && g > r * 1.05 && brightness > 0.22 && brightness < 0.75)
+                    {
+                        waterLike++;
+                    }
+
+                    if (g > r * 1.15 && g > b * 1.05 && brightness > 0.18)
+                    {
+                        vegetationLike++;
+                    }
+
+                    if (brightness > 0.78 && saturation < 0.22)
+                    {
+                        snowLike++;
+                    }
+
+                    if (r > 0.42 && g > 0.34 && b < 0.32 && saturation > 0.18)
+                    {
+                        sandLike++;
+                    }
+
+                    if (brightness > 0.22 && brightness < 0.58 && saturation < 0.22)
+                    {
+                        rockLike++;
+                    }
+
+                    if (brightness < 0.18)
+                    {
+                        darkLike++;
+                    }
+
+                    if (brightness > 0.75)
+                    {
+                        brightLike++;
+                    }
+
+                    if (r > b * 1.18 && r > g * 1.02)
+                    {
+                        warmLike++;
+                    }
+
+                    if (b > r * 1.15)
+                    {
+                        coolLike++;
+                    }
+
+                    if (saturation > 0.55 && brightness > 0.35)
+                    {
+                        artificialLike++;
+                    }
+
+                    if (x > 0 && y > 0)
+                    {
+                        var left = bitmap.GetPixel(x - 1, y);
+                        var above = bitmap.GetPixel(x, y - 1);
+
+                        var diffLeft = Math.Abs(c.R - left.R) + Math.Abs(c.G - left.G) + Math.Abs(c.B - left.B);
+                        var diffAbove = Math.Abs(c.R - above.R) + Math.Abs(c.G - above.G) + Math.Abs(c.B - above.B);
+
+                        if (diffLeft + diffAbove > 110)
+                        {
+                            edgeScore++;
+                        }
+                    }
+                }
+
+                if (y > 0 && y < height - 1)
+                {
+                    double normalizedRow = rowBrightness / width;
+
+                    double above = 0;
+                    double below = 0;
+
+                    for (int x = 0; x < width; x++)
+                    {
+                        var ca = bitmap.GetPixel(x, y - 1);
+                        var cb = bitmap.GetPixel(x, y + 1);
+
+                        above += (ca.R + ca.G + ca.B) / 765.0;
+                        below += (cb.R + cb.G + cb.B) / 765.0;
+                    }
+
+                    above /= width;
+                    below /= width;
+
+                    if (Math.Abs(above - below) > 0.18 && normalizedRow > 0.2)
+                    {
+                        horizonScore++;
                     }
                 }
             }
 
-            foreach (var preferred in PreferredVisionModelNames)
-            {
-                var match = installed.FirstOrDefault(x =>
-                    x.Contains(preferred, StringComparison.OrdinalIgnoreCase)
-                );
+            double pctSky = Percent(skyLike, total);
+            double pctWater = Percent(waterLike, total);
+            double pctVegetation = Percent(vegetationLike, total);
+            double pctSnow = Percent(snowLike, total);
+            double pctSand = Percent(sandLike, total);
+            double pctRock = Percent(rockLike, total);
+            double pctDark = Percent(darkLike, total);
+            double pctBright = Percent(brightLike, total);
+            double pctWarm = Percent(warmLike, total);
+            double pctCool = Percent(coolLike, total);
+            double pctArtificial = Percent(artificialLike, total);
+            double pctEdges = Percent(edgeScore, total);
 
-                if (!string.IsNullOrWhiteSpace(match))
-                {
-                    return match;
-                }
+            double avgBrightness = totalBrightness / total;
+            double avgSaturation = totalSaturation / total;
+
+            var features = new List<string>();
+            var possibleScenes = new List<string>();
+            var locationClues = new List<string>();
+
+            if (pctSky > 18) features.Add("large sky or open-air area");
+            if (pctWater > 12) features.Add("possible water, lake, ocean, river, or reflective blue surface");
+            if (pctVegetation > 12) features.Add("visible vegetation or green landscape");
+            if (pctSnow > 12) features.Add("snow, ice, clouds, pale stone, or bright low-saturation terrain");
+            if (pctSand > 8) features.Add("sand, desert, dry grass, canyon rock, or warm earth tones");
+            if (pctRock > 15) features.Add("stone, cliffs, mountains, concrete, or muted terrain");
+            if (pctEdges > 18) features.Add("high detail or many hard edges, possibly architecture, city texture, trees, or rocky terrain");
+            if (pctArtificial > 18 && pctEdges > 12) features.Add("strong saturated detail, possibly urban lighting, signage, flowers, or edited color");
+
+            if (pctWater > 15 && pctSky > 15)
+            {
+                possibleScenes.Add("coastal, lake, river, or island landscape");
+                locationClues.Add("Water plus open sky can suggest a coast, lake district, river valley, or waterfront city.");
             }
 
-            return null;
+            if (pctVegetation > 18 && pctSky > 12)
+            {
+                possibleScenes.Add("forest, meadow, park, countryside, or mountain valley");
+                locationClues.Add("Heavy green coverage suggests a temperate, tropical, or spring/summer landscape.");
+            }
+
+            if (pctSnow > 18 && pctSky > 8)
+            {
+                possibleScenes.Add("snowy mountain, glacier, winter landscape, or bright cloud scene");
+                locationClues.Add("Snow/ice clues can point toward alpine, polar, or winter regions, but this is not enough for a precise location.");
+            }
+
+            if (pctSand > 12 && pctVegetation < 10)
+            {
+                possibleScenes.Add("desert, canyon, beach, dunes, or arid terrain");
+                locationClues.Add("Warm earth tones with limited vegetation suggest an arid, desert, canyon, or beach-like environment.");
+            }
+
+            if (pctEdges > 22 && pctArtificial > 12)
+            {
+                possibleScenes.Add("city, architecture, street scene, interior, or highly structured landscape");
+                locationClues.Add("Dense edges and saturated regions may indicate buildings, windows, signs, lights, or human-made structures.");
+            }
+
+            if (pctRock > 20 && pctSky > 10)
+            {
+                possibleScenes.Add("mountain, cliff, canyon, rocky coastline, or stone architecture");
+                locationClues.Add("Rock-like muted tones with sky can suggest cliffs, mountains, canyons, or rocky shores.");
+            }
+
+            if (pctDark > 30)
+            {
+                possibleScenes.Add("night scene, shadow-heavy landscape, cave, dark forest, or low-light image");
+                locationClues.Add("Darkness limits location confidence because important visual clues may be hidden.");
+            }
+
+            if (possibleScenes.Count == 0)
+            {
+                possibleScenes.Add("general landscape, abstract wallpaper, close-up scene, or image without strong category signals");
+            }
+
+            if (features.Count == 0)
+            {
+                features.Add("no dominant simple visual feature detected");
+            }
+
+            var colorMood = BuildColorMood(avgBrightness, avgSaturation, pctWarm, pctCool);
+            var confidence = BuildConfidence(pctSky, pctWater, pctVegetation, pctSnow, pctSand, pctRock, pctEdges);
+
+            var sb = new StringBuilder();
+
+            sb.AppendLine("Onboard image analysis generated by SpotlightSaver.");
+            sb.AppendLine();
+            sb.AppendLine("Important:");
+            sb.AppendLine("This is a lightweight built-in visual estimate. It does not use Microsoft location metadata, cloud AI, Ollama, or an external model.");
+            sb.AppendLine();
+            sb.AppendLine("Scene estimate:");
+            sb.AppendLine("- " + string.Join("; ", possibleScenes.Distinct().Take(4)) + ".");
+            sb.AppendLine();
+            sb.AppendLine("Detected visual clues:");
+            foreach (var feature in features.Distinct().Take(8))
+            {
+                sb.AppendLine("- " + feature);
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("Color and image character:");
+            sb.AppendLine("- " + colorMood);
+            sb.AppendLine($"- Average brightness: {avgBrightness:P0}");
+            sb.AppendLine($"- Average saturation: {avgSaturation:P0}");
+            sb.AppendLine($"- Approximate edge/detail density: {pctEdges:P0}");
+
+            sb.AppendLine();
+            sb.AppendLine("Possible location clues:");
+            foreach (var clue in locationClues.Distinct().Take(5))
+            {
+                sb.AppendLine("- " + clue);
+            }
+
+            if (locationClues.Count == 0)
+            {
+                sb.AppendLine("- No reliable location-specific clue was detected from the image alone.");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("Location confidence:");
+            sb.AppendLine("- " + confidence);
+            sb.AppendLine();
+            sb.AppendLine("Suggested manual search terms:");
+            sb.AppendLine("- " + BuildSearchTerms(possibleScenes, features));
+
+            return sb.ToString();
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            return $"""
+Onboard image analysis: Failed.
+
+Reason:
+{ex.Message}
+
+The wallpaper was still saved. Only the built-in visual analysis failed.
+""";
         }
     }
 
-    private static string TrimForMetadata(string value)
+    private static double Percent(int value, int total)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (total <= 0)
         {
-            return "";
+            return 0;
         }
 
-        value = value.Trim();
+        return value / (double)total;
+    }
 
-        return value.Length <= 1200 ? value : value[..1200] + "...";
+    private static string BuildColorMood(double brightness, double saturation, double warm, double cool)
+    {
+        var mood = new List<string>();
+
+        if (brightness > 0.68) mood.Add("bright");
+        else if (brightness < 0.28) mood.Add("dark or shadow-heavy");
+        else mood.Add("balanced brightness");
+
+        if (saturation > 0.42) mood.Add("colorful");
+        else if (saturation < 0.20) mood.Add("muted or low-saturation");
+        else mood.Add("moderate color");
+
+        if (warm > cool * 1.2) mood.Add("warm-toned");
+        else if (cool > warm * 1.2) mood.Add("cool-toned");
+        else mood.Add("mixed warm/cool tones");
+
+        return string.Join(", ", mood) + ".";
+    }
+
+    private static string BuildConfidence(double sky, double water, double vegetation, double snow, double sand, double rock, double edges)
+    {
+        var strongest = new[] { sky, water, vegetation, snow, sand, rock, edges }.Max();
+
+        if (strongest > 0.30)
+        {
+            return "Medium for broad scene type, low for exact location. The image has strong visual category signals but not enough for a precise place name.";
+        }
+
+        if (strongest > 0.16)
+        {
+            return "Low to medium for broad scene type, low for exact location. Some visual clues exist, but they are not unique.";
+        }
+
+        return "Low. The image does not contain enough distinctive visual information for location inference.";
+    }
+
+    private static string BuildSearchTerms(List<string> scenes, List<string> features)
+    {
+        var terms = new List<string>();
+
+        foreach (var scene in scenes.Take(2))
+        {
+            terms.Add(scene.Split(',')[0].Trim());
+        }
+
+        foreach (var feature in features.Take(3))
+        {
+            var cleaned = feature
+                .Replace("possible ", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("visible ", "", StringComparison.OrdinalIgnoreCase)
+                .Trim();
+
+            terms.Add(cleaned);
+        }
+
+        terms.Add("Windows Spotlight wallpaper");
+
+        return string.Join(" ", terms.Distinct()).Trim();
     }
 }
 
@@ -1145,12 +1292,12 @@ public static class MetadataHelper
         sb.AppendLine("Location: Unknown unless EXIF or local Windows metadata exposes it.");
         sb.AppendLine();
 
-        sb.AppendLine("Local AI visual analysis:");
+        sb.AppendLine("Onboard visual analysis:");
         sb.AppendLine("-------------------------");
         sb.AppendLine(aiAnalysis);
         sb.AppendLine();
         sb.AppendLine("AI accuracy note:");
-        sb.AppendLine("The AI analysis is a best-effort visual guess from a local model. Treat location guesses as uncertain unless confirmed by external evidence.");
+        sb.AppendLine("The onboard analysis is a lightweight best-effort visual guess based on image features. Treat location guesses as uncertain unless confirmed by external evidence.");
         sb.AppendLine();
 
         sb.AppendLine("Privacy note:");
@@ -1179,3 +1326,4 @@ public static class MetadataHelper
         }
     }
 }
+
