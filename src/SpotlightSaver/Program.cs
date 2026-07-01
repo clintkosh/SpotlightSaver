@@ -98,7 +98,7 @@ public sealed class MainForm : Form
 
         aiCheckBox = new CheckBox
         {
-            Text = "Use onboard image analysis",
+            Text = "Use feature-based location candidates",
             Checked = true,
             Font = new Font("Segoe UI", 10f, FontStyle.Bold),
             ForeColor = Palette.Text,
@@ -111,7 +111,7 @@ public sealed class MainForm : Form
 
         aiHintLabel = new Label
         {
-            Text = "Built into this EXE. No Ollama, no server, no cloud upload.",
+            Text = "Detects mountains, waterfalls, statues, landmarks, cities, beaches, deserts, and more.",
             Font = new Font("Segoe UI", 9f, FontStyle.Regular),
             ForeColor = Palette.MutedText,
             BackColor = Palette.Card,
@@ -155,7 +155,7 @@ public sealed class MainForm : Form
 
         statusLabel = new Label
         {
-            Text = "Ready. Onboard analysis is built in and local-only.",
+            Text = "Ready. Location candidates are generated locally from visible features.",
             Font = new Font("Segoe UI", 9.5f, FontStyle.Regular),
             ForeColor = Palette.MutedText,
             BackColor = Palette.Card,
@@ -202,7 +202,7 @@ public sealed class MainForm : Form
 
         var aiBadge = new Label
         {
-            Text = "AI notes are guesses, not facts",
+            Text = "Location candidates are visual guesses",
             Font = new Font("Segoe UI", 9f, FontStyle.Regular),
             ForeColor = Palette.MutedText,
             BackColor = Palette.CardAlt,
@@ -297,10 +297,10 @@ public sealed class MainForm : Form
 
             if (aiCheckBox.Checked)
             {
-                statusLabel.Text = "Saved image. Running onboard visual analyzer...";
+                statusLabel.Text = "Saved image. Detecting location-relevant features...";
                 Refresh();
 
-                aiAnalysis = await Task.Run(() => BuiltInImageAnalyzer.AnalyzeImage(outputImage));
+                aiAnalysis = await Task.Run(() => LocationFeatureAnalyzer.AnalyzeImage(outputImage));
             }
             else
             {
@@ -913,7 +913,7 @@ public sealed class SleekDialog : Form
     {
         if (string.IsNullOrWhiteSpace(aiAnalysis))
         {
-            return "Local AI: No analysis was added.";
+            return "Location analysis: No candidate report was added.";
         }
 
         var firstLine = aiAnalysis
@@ -932,7 +932,7 @@ public sealed class SleekDialog : Form
             firstLine = firstLine[..185] + "...";
         }
 
-        return "AI preview: " + firstLine;
+        return "Location preview: " + firstLine;
     }
 
     private static void OpenPath(string path)
@@ -1292,7 +1292,7 @@ public static class MetadataHelper
         sb.AppendLine("Location: Unknown unless EXIF or local Windows metadata exposes it.");
         sb.AppendLine();
 
-        sb.AppendLine("Onboard visual analysis:");
+        sb.AppendLine("Location candidates by visible features:");
         sb.AppendLine("-------------------------");
         sb.AppendLine(aiAnalysis);
         sb.AppendLine();
@@ -1326,4 +1326,5 @@ public static class MetadataHelper
         }
     }
 }
+
 

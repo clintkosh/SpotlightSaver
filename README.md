@@ -60,17 +60,54 @@ The app is portable. Download the ZIP, unzip it, then double-click SpotlightSave
 
 Windows may show a SmartScreen warning because this is an unsigned independent utility.
 
-## Onboard image analysis
+## Download
 
-SpotlightSaver includes a lightweight built-in visual analyzer. It does not require Ollama, a model download, a local server, or a cloud API.
+Download the latest direct Windows EXE from the Releases page:
 
-The onboard analyzer estimates broad visual clues from the image, such as sky, water, vegetation, snow, sand, rock, brightness, color tone, edge density, and possible broad scene type.
+https://github.com/clintkosh/SpotlightSaver/releases/latest
 
-It may suggest general location clues such as coastal, mountain, desert, city, forest, or snowy terrain, but it does not claim exact locations unless reliable metadata is available.
+No ZIP is required. Download `SpotlightSaver.exe`, then double-click it.
 
-AI/location note:
+Windows may show a SmartScreen warning because this is an unsigned independent utility.
 
-The onboard analysis is a best-effort estimate. Treat location guesses as uncertain unless confirmed by Microsoft metadata, EXIF metadata, or external research.
+## Feature-based location candidates
+
+SpotlightSaver includes a lightweight built-in analyzer that focuses on possible locations from visible features.
+
+It looks for location-relevant clues such as:
+
+- waterfalls and terraced pools
+- turquoise mineral water
+- mountains, cliffs, snow, and glaciers
+- beaches, islands, reefs, and coastlines
+- deserts, dunes, and canyon terrain
+- cities, skylines, bridges, and landmark-like structures
+- statues, monuments, towers, temples, castles, ruins, and historic stone structures
+- aurora and polar/snow landscapes
+
+The app does not require Ollama, a model download, a local server, or a cloud API.
+
+The output focuses on:
+
+- detected visible features
+- possible location candidates
+- confidence
+- reason for each candidate
+
+Example:
+
+Detected features:
+- waterfalls / cascades
+- terraced waterfall ledges or stepped pools
+- turquoise or mineral-rich water
+- forest or dense vegetation
+
+Possible candidates:
+1. Kuang Si / Tat Kuang Si Falls, Luang Prabang, Laos
+2. Erawan Falls, Kanchanaburi, Thailand
+3. Plitvice Lakes National Park, Croatia
+
+Exact location is not guaranteed unless confirmed by metadata, visible text, GPS, or external lookup.
 
 ## Download
 
